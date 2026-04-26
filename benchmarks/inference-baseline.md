@@ -42,12 +42,38 @@
 
 | Field | Value |
 | --- | --- |
+| `model_name` | `./Qwen2-7B-Instruct` |
 | `tensor_parallel_size` | `1` |
 | `gpu_memory_utilization` | `0.88` |
 | `dtype` | `auto (FP16/BF16)` |
 | `enforce_eager` | `False (CUDA Graph)` |
+| `temperature` | `0.7` |
+| `base_prompts` | `3` |
 | `prompts` | `3 * 20` |
+| `request_count` | `60` |
 | `max_tokens` | `512` |
+
+### 已同步的 benchmark 脚本意图
+
+- 当前 `benchmark.py` 不是泛化跑模型脚本，而是一个面向 `vLLM continuous batching` 的最小实验入口。
+- 脚本重点是：
+  - 触发 `scheduler` 对多请求进行动态批处理
+  - 放大 `decode` 阶段，观察生成吞吐
+  - 先拿到真实 `tokens/s` 与单次请求平均耗时
+- 当前脚本的 workload 特征是：
+  - 使用 3 条中文基准 prompt
+  - 通过 `base_prompts * 20` 构造 60 个请求
+  - 通过 `max_tokens=512` 拉长生成阶段，方便观察 `decode` 表现
+- 当前脚本已直接输出：
+  - 总生成 token 数
+  - 总耗时
+  - 平均吞吐 `tokens/s`
+  - 单 prompt 平均耗时
+- 当前脚本还没有直接拆出：
+  - `TTFT`
+  - `TPOT`
+  - 显存占用
+  - `prefill / decode` 的分阶段指标
 
 ### 已跑通的命令入口
 
@@ -85,8 +111,8 @@ nsys profile \
 ### 当前状态判断
 
 - 当前不再是“从零开始准备环境”
-- 当前已经进入“实验链路已打通，但指标语言与结果解释仍待补齐”的阶段
-- 下一步重点不是继续折腾部署，而是把 benchmark 输出和 `TTFT / TPOT / throughput / memory` 建立稳定映射
+- 当前已经进入“实验链路已打通，且具备 continuous batching 与 decode 吞吐观测入口，但指标语言与结果解释仍待补齐”的阶段
+- 下一步重点不是继续折腾部署，而是把 benchmark 输出和 `TTFT / TPOT / throughput / memory` 建立稳定映射，并补齐分阶段观测手段
 
 ## 第一批实验任务
 
@@ -94,12 +120,17 @@ nsys profile \
 
 - 目标：
   - 跑通一条最小 `vLLM + GPU` 推理链路
+  - 固化当前 `continuous batching + decode throughput` 基线
 - 最少记录：
   - 模型
   - 请求方式
+  - 请求数量
+  - 总生成 tokens
+  - 总耗时
+  - throughput
+  - 单 prompt 平均耗时
   - TTFT
   - TPOT
-  - throughput
   - 显存占用
   - 当前瓶颈假设
 

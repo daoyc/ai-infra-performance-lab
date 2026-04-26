@@ -58,6 +58,19 @@ python benchmark.py
   - `prompts`: `3 * 20`
   - `max_tokens`: `512`
 
+- 结合补充的 `benchmark.py`，当前可以更准确地定义这个脚本的角色：
+  - 它不是泛化“跑模型”的模板，而是一个面向 `continuous batching` 的最小实验入口
+  - 它会通过 `3` 条基准 prompt 重复 `20` 次构造 `60` 个请求，主动触发 `scheduler` 的动态批处理
+  - 它通过 `max_tokens=512` 放大 `decode` 阶段，优先观察生成吞吐
+  - 它当前直接产出的核心结果是：
+    - 总生成 token 数
+    - 总耗时
+    - 平均吞吐 `tokens/s`
+    - 单 prompt 平均耗时
+- 这也意味着当前 benchmark 的强项和边界都更清楚了：
+  - 强项：已经能开始观察 `continuous batching` 下的 decode 吞吐表现
+  - 边界：还没有直接拆出 `TTFT`、`TPOT`、显存占用，以及 `prefill / decode` 的分阶段指标
+
 ### 4. Nsight Systems 采集入口准备
 
 - 已完成 `nsight-systems` 安装与路径确认思路。
@@ -99,12 +112,14 @@ nsys profile \
 - 模型链路
 - benchmark 入口
 - profiling 入口
+- 一条偏向 `continuous batching + decode throughput` 的基线脚本
 
 当前还没有真正补齐的是：
 
 - `TTFT / TPOT / throughput / memory` 的指标语言
 - `prefill / decode / KV cache` 和实际实验现象之间的对应关系
 - benchmark 输出如何转成“现象 -> 指标变化 -> 性能解释”
+- 当前脚本中哪些结果已经能作为基线，哪些结果仍需要额外埋点或采样来补齐
 
 换句话说，当前不是“不会搭环境”，而是“已经能开始做推理性能分析，但还没把分析语言建立起来”。
 
@@ -135,11 +150,15 @@ set termencoding=utf-8
 
 1. 用自己的语言补齐 `decoder-only / prefill / decode / KV cache / TTFT / TPOT`
 2. 把 benchmark 输出字段和这些指标建立明确映射
-3. 先围绕 3 类变量做最小实验对比：
+3. 先把当前脚本补成一条更完整的基线：
+   - 明确 `request_count=60`
+   - 固化总 token / 总耗时 / `tokens/s` / 单 prompt 平均耗时
+   - 决定 `TTFT / TPOT / memory` 的补齐方式
+4. 再围绕 3 类变量做最小实验对比：
    - `batch size`
    - `concurrency`
    - `input/output length`
-4. 在实验台账中固定记录：
+5. 在实验台账中固定记录：
    - 现象
    - 指标变化
    - 瓶颈假设
