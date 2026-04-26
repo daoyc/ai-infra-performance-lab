@@ -53,6 +53,31 @@
 | `request_count` | `60` |
 | `max_tokens` | `512` |
 
+### 已同步的 baseline 数据
+
+来源：`benchmark数据.xlsx / 基线数据`
+
+| Round | Total Generated Tokens | Total Time (s) | Output Throughput (tok/s) | Avg Per Prompt (s) |
+| --- | --- | --- | --- | --- |
+| 1 | `29374` | `11.21` | `2620.4` | `0.19` |
+| 2 | `29374` | `10.85` | `2707.3` | `0.18` |
+| 3 | `29374` | `10.85` | `2708.4` | `0.18` |
+| AVG | `29374` | `10.97` | `2678.7` | `0.183` |
+
+### 对当前 baseline 的解释
+
+- 当前 baseline 已经具备基本重复性：
+  - `time(s)` 波动系数约 `1.55%`
+  - `tokens/s` 波动系数约 `1.54%`
+- 当前这组 baseline 最适合作为：
+  - offline 吞吐基线
+  - `continuous batching + decode throughput` 观察起点
+- 当前这组 baseline 还不等价于：
+  - `TTFT`
+  - `TPOT`
+  - 请求级 latency 分布
+  - `prefill / decode` 分阶段解释
+
 ### 已同步的 benchmark 脚本意图
 
 - 当前 `benchmark.py` 不是泛化跑模型脚本，而是一个面向 `vLLM continuous batching` 的最小实验入口。
@@ -75,6 +100,13 @@
   - 显存占用
   - `prefill / decode` 的分阶段指标
 
+### 仓库内 benchmark 入口
+
+- [benchmark.py](benchmark.py)
+- 当前脚本包含两条路径：
+  - `offline`：沿用当前 `LLM.generate` 基线，测吞吐、平均耗时与显存
+  - `serve`：包装官方 `vllm bench serve`，用于采集 `TTFT / TPOT / ITL / E2E latency`
+
 ### 已跑通的命令入口
 
 #### 模型完整性校验
@@ -89,7 +121,20 @@ model = AutoModelForCausalLM.from_pretrained(path, device_map="cpu")
 #### Benchmark 入口
 
 ```bash
-python benchmark.py
+python benchmarks/benchmark.py offline
+```
+
+#### Serve Benchmark 入口
+
+```bash
+python benchmarks/benchmark.py serve \
+  --base-url http://127.0.0.1:8000 \
+  --model Qwen2-7B-Instruct \
+  --num-prompts 60 \
+  --input-len 128 \
+  --output-len 512 \
+  --request-rate inf \
+  --max-concurrency 60
 ```
 
 #### Nsight Systems 采集入口
@@ -111,8 +156,10 @@ nsys profile \
 ### 当前状态判断
 
 - 当前不再是“从零开始准备环境”
-- 当前已经进入“实验链路已打通，且具备 continuous batching 与 decode 吞吐观测入口，但指标语言与结果解释仍待补齐”的阶段
-- 下一步重点不是继续折腾部署，而是把 benchmark 输出和 `TTFT / TPOT / throughput / memory` 建立稳定映射，并补齐分阶段观测手段
+- 当前已经进入“offline 吞吐基线已稳定，且具备继续补齐 `TTFT / TPOT / memory` 的脚本入口，但指标语言与结果解释仍待补齐”的阶段
+- 下一步重点不是继续折腾部署，而是把 offline benchmark 与 serve benchmark 的角色彻底分开：
+  - offline：吞吐、平均耗时、显存
+  - serve：`TTFT / TPOT / ITL / E2E latency`
 
 ## 第一批实验任务
 
@@ -133,6 +180,20 @@ nsys profile \
   - TPOT
   - 显存占用
   - 当前瓶颈假设
+
+### Experiment 1A：Serve 指标补齐
+
+- 目标：
+  - 跑出第一组 `TTFT / TPOT / memory`
+  - 建立 offline benchmark 与 serve benchmark 的映射关系
+- 最少记录：
+  - `TTFT`
+  - `TPOT`
+  - `ITL`
+  - `E2E latency`
+  - `request throughput`
+  - GPU 显存峰值
+  - 当前解释
 
 ### Experiment 2：Batch size 对比
 
