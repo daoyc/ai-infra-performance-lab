@@ -22,7 +22,6 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
-import statistics
 import subprocess
 import sys
 import threading
@@ -51,6 +50,39 @@ def str2bool(value: str) -> bool:
 
 def build_prompts(multiplier: int) -> list[str]:
     return DEFAULT_BASE_PROMPTS * multiplier
+
+
+def format_value(value: Any) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float):
+        return f"{value:.4f}".rstrip("0").rstrip(".")
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(item) for item in value)
+    return str(value)
+
+
+def render_table(headers: list[str], rows: list[list[Any]]) -> str:
+    rendered_rows = [[format_value(cell) for cell in row] for row in rows]
+    widths = [len(header) for header in headers]
+    for row in rendered_rows:
+        for idx, cell in enumerate(row):
+            widths[idx] = max(widths[idx], len(cell))
+
+    def fmt_row(row: list[str]) -> str:
+        return "| " + " | ".join(cell.ljust(widths[idx]) for idx, cell in enumerate(row)) + " |"
+
+    separator = "|-" + "-|-".join("-" * width for width in widths) + "-|"
+    lines = [fmt_row(headers), separator]
+    lines.extend(fmt_row(row) for row in rendered_rows)
+    return "\n".join(lines)
+
+
+def print_section(title: str, headers: list[str], rows: list[list[Any]]) -> None:
+    print(f"\n[{title}]")
+    print(render_table(headers, rows))
 
 
 @dataclass
@@ -155,8 +187,129 @@ def save_json(payload: dict[str, Any], output_path: str | None) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def print_json(payload: dict[str, Any]) -> None:
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
+def maybe_print_json(payload: dict[str, Any], args: argparse.Namespace) -> None:
+    if args.print_json:
+        print("\n[raw-json]")
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def print_offline_summary(result: dict[str, Any]) -> None:
+    config = result["config"]
+    metrics = result["metrics"]
+    memory = result["memory"]
+    coverage = result["coverage"]
+
+    print("\n=== Offline 基线测试摘要 ===")
+    print("说明：这组结果更适合观察 continuous batching 下的 decode 吞吐，不直接提供 TTFT / TPOT。")
+
+    print_section(
+        "测试工作负载",
+        ["字段", "取值"],
+        [
+            ["测试模式", result["mode"]],
+            ["模型路径", config["model_name"]],
+            ["请求总数", config["request_count"]],
+            ["prompt 重复倍数", config["prompt_multiplier"]],
+            ["最大输出 token", config["max_tokens"]],
+            ["temperature", config["temperature"]],
+        ],
+    )
+    print_section(
+        "运行配置",
+        ["字段", "取值"],
+        [
+            ["张量并行数", config["tensor_parallel_size"]],
+            ["显存利用率上限", config["gpu_memory_utilization"]],
+            ["dtype", config["dtype"]],
+            ["enforce_eager", config["enforce_eager"]],
+        ],
+    )
+    print_section(
+        "核心指标",
+        ["指标", "数值", "解释"],
+        [
+            ["总输出 token", metrics["total_generated_tokens"], "这一轮总共生成了多少 token"],
+            ["总耗时(秒)", metrics["total_time_s"], "60 个请求从开始到结束的总耗时"],
+            ["输出吞吐(tok/s)", metrics["output_token_throughput_tps"], "整体生成吞吐，当前更偏 decode"],
+            ["均摊单请求耗时(秒)", metrics["avg_request_time_s"], "总耗时均摊到每个请求后的结果"],
+            ["TTFT(ms)", metrics["ttft_ms"], "offline 模式不直接提供"],
+            ["TPOT(ms)", metrics["tpot_ms"], "offline 模式不直接提供"],
+        ],
+    )
+    print_section(
+        "显存观测",
+        ["字段", "取值"],
+        [
+            ["GPU 编号", memory["gpu_index"]],
+            ["是否采集成功", memory["available"]],
+            ["总显存(MB)", memory["total_mb"]],
+            ["起始显存(MB)", memory["used_start_mb"]],
+            ["结束显存(MB)", memory["used_end_mb"]],
+            ["显存峰值(MB)", memory["peak_used_mb"]],
+            ["峰值占比(%)", memory["peak_usage_pct"]],
+            ["备注", memory["note"]],
+        ],
+    )
+    print_section(
+        "当前覆盖范围",
+        ["类别", "内容"],
+        [
+            ["本次已测到", coverage["measured_now"]],
+            ["offline 还不能直接测到", coverage["not_directly_measured_in_offline_mode"]],
+        ],
+    )
+
+
+def print_serve_summary(summary: dict[str, Any]) -> None:
+    config = summary["config"]
+    memory = summary["memory"]
+    interesting = summary.get("interesting_metrics", {})
+
+    print("\n=== Serve 基线测试摘要 ===")
+    print("说明：这组结果用于补齐请求级 latency 指标，例如 TTFT / TPOT / ITL / E2E latency。")
+
+    print_section(
+        "请求配置",
+        ["字段", "取值"],
+        [
+            ["后端", config["backend"]],
+            ["base_url", config["base_url"]],
+            ["endpoint", config["endpoint"]],
+            ["模型名", config["model"]],
+            ["dataset_name", config["dataset_name"]],
+            ["请求数", config["num_prompts"]],
+            ["输入长度", config["input_len"]],
+            ["输出长度", config["output_len"]],
+            ["request_rate", config["request_rate"]],
+            ["最大并发", config["max_concurrency"]],
+            ["本轮总耗时(秒)", summary["run_time_s"]],
+            ["结果文件", summary["result_json"]],
+        ],
+    )
+    print_section(
+        "显存观测",
+        ["字段", "取值"],
+        [
+            ["GPU 编号", memory["gpu_index"]],
+            ["是否采集成功", memory["available"]],
+            ["总显存(MB)", memory["total_mb"]],
+            ["起始显存(MB)", memory["used_start_mb"]],
+            ["结束显存(MB)", memory["used_end_mb"]],
+            ["显存峰值(MB)", memory["peak_used_mb"]],
+            ["峰值占比(%)", memory["peak_usage_pct"]],
+            ["备注", memory["note"]],
+        ],
+    )
+
+    if interesting:
+        interesting_rows = [[key, value] for key, value in sorted(interesting.items())]
+        print_section("解析出的关键指标", ["指标", "数值"], interesting_rows)
+    else:
+        print_section(
+            "解析出的关键指标",
+            ["指标", "数值"],
+            [["备注", summary.get("note", "未解析到指标，请检查 vllm bench serve 输出。")]],
+        )
 
 
 def run_offline(args: argparse.Namespace) -> int:
@@ -175,7 +328,7 @@ def run_offline(args: argparse.Namespace) -> int:
     monitor = NvidiaMemoryMonitor(gpu_index=args.gpu_index, interval_s=args.memory_poll_interval_s)
     monitor.start()
 
-    print("正在初始化 vLLM，引擎会在这一步准备 KV cache 与 scheduler ...")
+    print("正在初始化 vLLM，这一步会准备 KV cache 与 scheduler ...")
     llm = LLM(
         model=args.model_name,
         tensor_parallel_size=args.tensor_parallel_size,
@@ -247,7 +400,8 @@ def run_offline(args: argparse.Namespace) -> int:
         },
     }
 
-    print_json(result)
+    print_offline_summary(result)
+    maybe_print_json(result, args)
     save_json(result, args.output_json)
     del llm
     time.sleep(1)
@@ -381,7 +535,8 @@ def run_serve(args: argparse.Namespace) -> int:
         summary["interesting_metrics"] = {}
         summary["note"] = "未找到保存结果文件，请确认 vllm bench serve 已成功输出结果。"
 
-    print_json(summary)
+    print_serve_summary(summary)
+    maybe_print_json(summary, args)
     save_json(summary, args.summary_json)
     return proc.returncode
 
@@ -408,6 +563,7 @@ def build_parser() -> argparse.ArgumentParser:
     offline.add_argument("--memory-poll-interval-s", type=float, default=0.1)
     offline.add_argument("--nvtx", action="store_true")
     offline.add_argument("--output-json")
+    offline.add_argument("--print-json", action="store_true")
 
     serve = subparsers.add_parser(
         "serve",
@@ -432,6 +588,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--memory-poll-interval-s", type=float, default=0.1)
     serve.add_argument("--disable-tqdm", action="store_true")
     serve.add_argument("--no-stream", action="store_true")
+    serve.add_argument("--print-json", action="store_true")
 
     return parser
 
