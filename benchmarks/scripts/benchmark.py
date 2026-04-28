@@ -26,6 +26,7 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -64,15 +65,29 @@ def format_value(value: Any) -> str:
     return str(value)
 
 
+def display_width(text: str) -> int:
+    width = 0
+    for char in text:
+        if unicodedata.combining(char):
+            continue
+        width += 2 if unicodedata.east_asian_width(char) in {"W", "F"} else 1
+    return width
+
+
+def pad_display(text: str, target_width: int) -> str:
+    padding = max(target_width - display_width(text), 0)
+    return text + (" " * padding)
+
+
 def render_table(headers: list[str], rows: list[list[Any]]) -> str:
     rendered_rows = [[format_value(cell) for cell in row] for row in rows]
-    widths = [len(header) for header in headers]
+    widths = [display_width(header) for header in headers]
     for row in rendered_rows:
         for idx, cell in enumerate(row):
-            widths[idx] = max(widths[idx], len(cell))
+            widths[idx] = max(widths[idx], display_width(cell))
 
     def fmt_row(row: list[str]) -> str:
-        return "| " + " | ".join(cell.ljust(widths[idx]) for idx, cell in enumerate(row)) + " |"
+        return "| " + " | ".join(pad_display(cell, widths[idx]) for idx, cell in enumerate(row)) + " |"
 
     separator = "|-" + "-|-".join("-" * width for width in widths) + "-|"
     lines = [fmt_row(headers), separator]
@@ -83,6 +98,138 @@ def render_table(headers: list[str], rows: list[list[Any]]) -> str:
 def print_section(title: str, headers: list[str], rows: list[list[Any]]) -> None:
     print(f"\n[{title}]")
     print(render_table(headers, rows))
+
+
+def build_offline_judgments(result: dict[str, Any]) -> list[list[Any]]:
+    config = result["config"]
+    metrics = result["metrics"]
+    memory = result["memory"]
+    judgments: list[list[Any]] = []
+
+    judgments.append(
+        [
+            "吞吐定位",
+            "当前结果更适合作为 decode 吞吐基线",
+            "offline 模式直接统计总输出 token / 总耗时，最能反映 continuous batching 下的整体生成效率。",
+        ]
+    )
+    judgments.append(
+        [
+            "延迟边界",
+            "当前不能判断首 token 体验",
+            "TTFT / TPOT 为空，说明这轮还不能拿来解释首包慢不慢，也不能区分 prefill 和 decode 的分阶段延迟。",
+        ]
+    )
+
+    if memory.get("peak_usage_pct") is not None:
+        peak_pct = float(memory["peak_usage_pct"])
+        if peak_pct >= 90:
+            summary = "显存压力已经偏高"
+            detail = "峰值显存占比已经接近满载，后续如果提高并发、输出长度或上下文长度，要优先关注 KV cache 挤压与 OOM 风险。"
+        elif peak_pct >= 80:
+            summary = "显存占用较高但仍可继续观察"
+            detail = "当前已经进入高显存区间，适合继续做小步参数实验，但不宜一次性把多个变量同时拉高。"
+        else:
+            summary = "显存仍有一定余量"
+            detail = "当前更适合继续做 batch、并发或输出长度对比，先观察吞吐与显存变化关系。"
+        judgments.append(["显存判断", summary, detail])
+
+    request_count = config.get("request_count")
+    if request_count and int(request_count) > 1:
+        judgments.append(
+            [
+                "工作负载形态",
+                "当前结果含有明显批处理效应",
+                f"这轮共有 {request_count} 个请求，vLLM scheduler 会主动做动态批处理，所以结果不等价于单请求纯延迟。",
+            ]
+        )
+
+    temperature = config.get("temperature")
+    if temperature is not None and float(temperature) > 0:
+        judgments.append(
+            [
+                "可重复性提醒",
+                "当前总 token 数可能存在轻微波动",
+                "temperature 大于 0 会带来采样随机性；如果后面要做严格性能校准，建议再补一轮 temperature=0 的基线。",
+            ]
+        )
+
+    avg_req = metrics.get("avg_request_time_s")
+    if avg_req is not None:
+        judgments.append(
+            [
+                "均摊单请求耗时",
+                "只能做粗粒度均值参考",
+                "这个值是总耗时除以请求数，不是请求级 P50/P95 latency，也不是 TTFT；后续不要把它直接当成真实用户体验指标。",
+            ]
+        )
+
+    return judgments
+
+
+def build_serve_judgments(summary: dict[str, Any]) -> list[list[Any]]:
+    interesting = summary.get("interesting_metrics", {})
+    judgments: list[list[Any]] = []
+
+    has_ttft = any("ttft" in key.lower() for key in interesting)
+    has_tpot = any("tpot" in key.lower() or "itl" in key.lower() for key in interesting)
+
+    if has_ttft:
+        judgments.append(
+            [
+                "首包视角",
+                "这轮已经可以开始看首 token 体验",
+                "只要结果里出现 TTFT，就可以开始讨论 prefill、排队和首包响应时间。",
+            ]
+        )
+    else:
+        judgments.append(
+            [
+                "首包视角",
+                "这轮还没拿到可靠 TTFT",
+                "如果结果文件里没有 TTFT 字段，就还不能完整回答首 token 为什么快或慢。",
+            ]
+        )
+
+    if has_tpot:
+        judgments.append(
+            [
+                "生成阶段视角",
+                "这轮已经可以开始看稳定生成速度",
+                "TPOT / ITL 更适合解释 decode 阶段的生成节奏，可以和 offline 的 tok/s 形成互补。",
+            ]
+        )
+    else:
+        judgments.append(
+            [
+                "生成阶段视角",
+                "这轮还没完整拿到 token 级延迟",
+                "如果没有 TPOT / ITL，就还不能把请求级延迟和稳定生成速度拆开解释。",
+            ]
+        )
+
+    memory = summary.get("memory", {})
+    peak_pct = memory.get("peak_usage_pct")
+    if peak_pct is not None:
+        peak_pct = float(peak_pct)
+        if peak_pct >= 90:
+            judgments.append(
+                [
+                    "显存判断",
+                    "显存占用接近满载",
+                    "后续如果 TTFT、TPOT 变差，同时显存峰值继续上升，就要优先怀疑 KV cache 与并发压力。",
+                ]
+            )
+        elif peak_pct >= 80:
+            judgments.append(
+                [
+                    "显存判断",
+                    "显存占用较高",
+                    "适合继续做 request_count / output_len 对比，观察吞吐和 latency 是否一起恶化。",
+                ]
+            )
+
+    return judgments
 
 
 @dataclass
@@ -258,6 +405,11 @@ def print_offline_summary(result: dict[str, Any]) -> None:
             ["offline 还不能直接测到", coverage["not_directly_measured_in_offline_mode"]],
         ],
     )
+    print_section(
+        "结果判断",
+        ["维度", "结论", "判断说明"],
+        build_offline_judgments(result),
+    )
 
 
 def print_serve_summary(summary: dict[str, Any]) -> None:
@@ -310,6 +462,11 @@ def print_serve_summary(summary: dict[str, Any]) -> None:
             ["指标", "数值"],
             [["备注", summary.get("note", "未解析到指标，请检查 vllm bench serve 输出。")]],
         )
+    print_section(
+        "结果判断",
+        ["维度", "结论", "判断说明"],
+        build_serve_judgments(summary),
+    )
 
 
 def run_offline(args: argparse.Namespace) -> int:
