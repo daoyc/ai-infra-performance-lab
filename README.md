@@ -1,28 +1,66 @@
 # AI Infra Performance Lab
 
-记录我从当前基础出发，向 AI Infra / AI 性能工程 / LLM 推理优化方向迁移的过程。
+记录我从当前基础出发，向 `AI Infra / AI 性能工程 / LLM 推理优化` 方向迁移的过程。
 
-## 仓库导航
+## 主目录
 
-- [人物画像](docs/profile.md)
-- [技能基线](docs/skill-baseline.md)
-- [第一周评估记录](logs/week-001.md)
-- [第二周追踪记录](logs/week-002.md)
-- [阶段路线图](ROADMAP.md)
-- [推理指标对照表](docs/inference-metrics-map.md)
-- [学习推进闭环](docs/learning-loop.md)
-- [报告目录](reports/README.md)
-- [基准测试目录](benchmarks/README.md)
+### 1. `identity/`
+
+- [目录入口](identity/README.md)
+- [人物画像](identity/summary.md)
+- [技能基线](identity/skills.md)
+
+这一组只回答两件事：
+
+- 我当前是谁
+- 我已经验证了哪些能力
+
+### 2. `execution/`
+
+- [目录入口](execution/README.md)
+- [路线图](execution/roadmap.md)
+- [当前阻塞问题](execution/current-blockers.md)
+- [概念与术语](execution/concepts.md)
+- [学习方法](execution/method.md)
+- [周推进记录](execution/weekly/week-001.md)
+- [Week 002](execution/weekly/week-002.md)
+
+这一组只回答三件事：
+
+- 接下来做什么
+- 当前卡在哪里
+- 每周怎么推进
+
+### 3. `benchmarks/`
+
+- [目录入口](benchmarks/README.md)
+- [基线台账](benchmarks/baselines.md)
+- [benchmark 脚本](benchmarks/scripts/benchmark.py)
+- [指标说明](benchmarks/metrics-guide.md)
+- [实验分析](benchmarks/analysis/README.md)
+
+这一组只回答两件事：
+
+- 已经跑出了哪些数据
+- 这些数据分别说明什么，还缺什么
+
+### 4. 其他
+
+- [Agent 规则](AGENTS.md)
 - [工具目录](tools/README.md)
-
-## 记录逻辑
-
-- `Profile` 负责回答“我是谁”。
-- `Skill Baseline` 负责回答“我当前会什么，证据在哪里”。
-- `Logs / Benchmarks / Reports` 负责回答“我做了什么，以及技能如何升级”。
 
 ## 当前阶段
 
-当前已验证主线集中在分布式计算性能优化、系统级调优、CPU 微架构指标分析与 NUMA 资源规划。  
-`AI-agent` 相关经历作为次核心能力呈现，用来体现工程流程设计与团队效率提升能力。  
-`LLM 推理框架 / CUDA / vLLM` 暂记为后续发展方向，不在当前已验证主线内。
+当前主线已经从“搭环境”推进到“解释 benchmark 数据”：
+
+- `vLLM + GPU` 环境与模型校验已经打通
+- offline benchmark 基线已经跑通并具备重复性
+- 当前最关键的工作，是把 `TTFT / TPOT / memory / prefill / decode` 建立成自己的指标语言
+
+## 记录规则
+
+- `identity/` 放稳定结论，不堆过程
+- `execution/` 放路线图、阻塞点、方法与周推进
+- `benchmarks/` 放脚本、数据、指标解释与实验分析
+
+后续新增内容优先落到这三条主线上，不再回到按 `docs / logs / reports` 分类的方式。

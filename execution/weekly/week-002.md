@@ -48,7 +48,7 @@
 
 - 本周新增的是“推理指标语言”和“benchmark 解释框架”的基础设施。
 - 这仍然主要支撑 `LLM 推理性能` 方向的学习推进。
-- 本周暂不升级 `docs/skill-baseline.md` 中的相关技能等级，因为还缺少一轮带 `TTFT / TPOT / memory` 的实测证据。
+- 本周暂不升级 `identity/skills.md` 中的相关技能等级，因为还缺少一轮带 `TTFT / TPOT / memory` 的实测证据。
 
 ## 下周只做什么
 

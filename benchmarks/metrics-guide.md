@@ -57,12 +57,12 @@
 | `output throughput (tok/s)` | `已遇到` | `benchmark数据.xlsx` / offline benchmark | 总输出 token / 总耗时，表示整体生成吞吐 | `decode` 更明显 | 这是你当前最可信的核心指标，但它不是完整用户体验指标 |
 | `avg per prompt (s)` | `已遇到` | `benchmark数据.xlsx` / offline benchmark | 总耗时均摊到每个请求后的平均时间 | `prefill + decode` 混合 | 只能当粗粒度均值，不能当严格单请求 latency |
 | `request_count` | `已遇到` | 当前 `benchmark.py` 配置 | 一轮 benchmark 发出了多少请求 | 调度层 | 你当前默认 workload 是 `3 * 20 = 60` 个请求 |
-| `TTFT` | `脚本已支持，待采集` | `benchmarks/benchmark.py serve` | Time To First Token，首 token 延迟 | `prefill` 更明显 | 它更接近“用户第一次看到响应要等多久” |
-| `TPOT` | `脚本已支持，待采集` | `benchmarks/benchmark.py serve` | Time Per Output Token，后续 token 平均生成时间 | `decode` 更明显 | 它更接近稳定生成阶段的速度，而不是首包速度 |
+| `TTFT` | `脚本已支持，待采集` | `benchmarks/scripts/benchmark.py serve` | Time To First Token，首 token 延迟 | `prefill` 更明显 | 它更接近“用户第一次看到响应要等多久” |
+| `TPOT` | `脚本已支持，待采集` | `benchmarks/scripts/benchmark.py serve` | Time Per Output Token，后续 token 平均生成时间 | `decode` 更明显 | 它更接近稳定生成阶段的速度，而不是首包速度 |
 | `ITL` | `脚本已支持，待采集` | `vllm bench serve` | Inter-Token Latency，相邻输出 token 间隔 | `decode` | 通常和 TPOT 一起看，用来判断生成阶段是否平稳 |
 | `E2E latency` | `脚本已支持，待采集` | `vllm bench serve` | 一个请求从进入到完整结束的总时延 | `prefill + decode + queue` | 更适合看完整请求体验 |
 | `request throughput (req/s)` | `脚本已支持，待采集` | `vllm bench serve` | 每秒处理多少请求 | 调度层 | 它和 `tok/s` 不同，更像系统容量指标 |
-| `GPU memory used / peak` | `脚本已支持，待采集` | 新版 `benchmarks/benchmark.py` | 运行过程中显存占用和峰值占用 | `KV cache / runtime` | 当前先把它当资源占用指标，不要急着把“显存高”直接解释为“性能好/差” |
+| `GPU memory used / peak` | `脚本已支持，待采集` | 新版 `benchmarks/scripts/benchmark.py` | 运行过程中显存占用和峰值占用 | `KV cache / runtime` | 当前先把它当资源占用指标，不要急着把“显存高”直接解释为“性能好/差” |
 | `gpu_cache_usage_perc` | `后续阶段` | vLLM metrics / Prometheus | KV cache 使用比例 | `KV cache` | 后面判断 cache 是否成为约束时会很重要 |
 | `queue time` | `后续阶段` | vLLM metrics | 请求在真正执行前排队多久 | 调度层 | 并发提高后会影响 TTFT 与 E2E |
 | `P50 / P95 / P99 latency` | `后续阶段` | `vllm bench serve` | 延迟分布，而不是平均值 | 调度层 | 平均值好看不代表尾延迟也好 |
@@ -81,7 +81,7 @@
 
 ## 接下来只需要补齐的东西
 
-1. 用 `benchmarks/benchmark.py serve` 跑出第一份 `TTFT / TPOT / memory` 结果。
+1. 用 `benchmarks/scripts/benchmark.py serve` 跑出第一份 `TTFT / TPOT / memory` 结果。
 2. 把当前 offline benchmark 和 serve benchmark 的角色彻底分开：
    - offline：偏吞吐与 decode 基线
    - serve：偏请求级 latency 与 TTFT/TPOT

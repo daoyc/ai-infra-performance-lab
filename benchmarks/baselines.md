@@ -121,13 +121,13 @@ model = AutoModelForCausalLM.from_pretrained(path, device_map="cpu")
 #### Benchmark 入口
 
 ```bash
-python benchmarks/benchmark.py offline
+python benchmarks/scripts/benchmark.py offline
 ```
 
 #### Serve Benchmark 入口
 
 ```bash
-python benchmarks/benchmark.py serve \
+python benchmarks/scripts/benchmark.py serve \
   --base-url http://127.0.0.1:8000 \
   --model Qwen2-7B-Instruct \
   --num-prompts 60 \

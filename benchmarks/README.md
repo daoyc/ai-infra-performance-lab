@@ -1,24 +1,29 @@
 # Benchmarks
 
-记录推理实验设计、指标结果、瓶颈假设与后续对比结论。
+这一组文件集中记录推理实验脚本、数据基线、指标解释和实验分析。
 
-当前默认实验主线：
+## 文件说明
 
-- `vLLM + GPU`
-- 云端单卡
-- 优先 `4090 24G`
+- [基线台账](baselines.md)
+  - 统一记录 baseline、变量对比和结果解释
+- [benchmark 脚本](scripts/benchmark.py)
+  - 当前仓库内的正式脚本入口
+  - 已拆成 `offline / serve` 两条路径
+- [指标说明](metrics-guide.md)
+  - 解释当前已遇到和未遇到的推理性能指标
+- [实验分析](analysis/README.md)
+  - 收纳阶段报告、实验总结与复盘材料
 
-当前已同步进来的历史进度：
+## 当前状态
 
 - 已完成云端 GPU 环境准备
 - 已验证 `Qwen2-7B-Instruct` 可下载并完成完整性校验
-- 已有基础 benchmark 入口
-- 已有 Nsight Systems 采集入口
+- 已有 offline benchmark 基线
+- 已有 `vllm bench serve` 方向的脚本入口
 - 已同步 3 轮 offline baseline 数据
-- 已把仓库内 benchmark 脚本拆成 `offline / serve` 两条路径
 
-实验记录统一入口：
+## 这组文件回答什么
 
-- [推理基线台账](inference-baseline.md)
-- [仓库内 benchmark 脚本](benchmark.py)
-- [推理指标对照表](../docs/inference-metrics-map.md)
+- 我已经跑出了哪些数字
+- 这些数字代表什么
+- 下一轮实验该怎么跑

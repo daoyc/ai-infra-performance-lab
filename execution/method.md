@@ -71,15 +71,15 @@
 
 6. 回写仓库  
    至少同步到：
-   - `benchmarks/inference-baseline.md`
+   - `../benchmarks/baselines.md`
    - `logs/`
-   - 必要时 `reports/`
+   - 必要时 `../benchmarks/analysis/`
 
 ## 当前的追踪节奏
 
 ### Stage 1：补齐指标语言
 
-- 跑通 `benchmarks/benchmark.py serve`
+- 跑通 `benchmarks/scripts/benchmark.py serve`
 - 拿到第一组 `TTFT / TPOT / memory`
 - 用自己的话解释这些指标
 
@@ -121,7 +121,7 @@
 
 你接下来最应该做的不是继续看资料，而是：
 
-1. 用新版 `benchmarks/benchmark.py` 跑出第一组 `serve` 结果。
+1. 用新版 `benchmarks/scripts/benchmark.py` 跑出第一组 `serve` 结果。
 2. 把 `TTFT / TPOT / memory` 写回台账。
 3. 只做一轮单变量对比，先看 `output length`。
 4. 写一条最小解释：

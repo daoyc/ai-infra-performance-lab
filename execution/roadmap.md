@@ -42,8 +42,8 @@
 
 本周产物：
 
-- `docs/llm-inference-lexicon.md`
-- `docs/open-questions.md`
+- `execution/concepts.md`
+- `execution/current-blockers.md`
 - 一版可口头复述的推理链路说明
 - 已有部署与 benchmark 进度同步进实验台账
 
@@ -88,7 +88,7 @@
 
 阶段产物：
 
-- `benchmarks/inference-baseline.md`
+- `benchmarks/baselines.md`
 - 至少 1 组基线记录
 - 至少 3 组对比实验
 - 已同步现有环境、版本与 benchmark 入口配置
