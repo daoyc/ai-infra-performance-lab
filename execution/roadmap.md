@@ -13,6 +13,16 @@
 - 已验证 `4090 24G + vLLM 0.10.1.1 + CUDA 11.8 + Qwen2-7B-Instruct` 这一组合可用
 - 已完成模型下载、完整性校验、benchmark 入口和 Nsight Systems 采集入口的打通
 - 已记录一条基础 benchmark 配置链路，说明实际进度已经提前进入 `Week 2` 的实验准备阶段
+- 已跑通 `serve` benchmark，并形成第一组请求级 latency baseline：`Mean TTFT=169.71 ms`、`Mean TPOT=21.28 ms`、`Mean ITL=20.36 ms`
+
+当前整体进度评估：
+
+- 总体迁移计划：约 `35%`
+- Phase 1 概念与指标语言：约 `80%`
+- Phase 2 vLLM 单卡实验与指标观察：约 `35%`
+- Phase 3 runtime 分析与岗位证据沉淀：约 `0%`
+
+这个百分比是保守评估：你已经完成环境、offline baseline 和 serve baseline，但还缺少单变量对比、memory 稳定记录、runtime 观察和阶段报告。
 
 这意味着当前路线不是从零开始，而是：
 

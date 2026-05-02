@@ -15,7 +15,7 @@
 
 | Date | Stack | Model | Hardware | Workload | Batch | Concurrency | Input Length | Output Length | TTFT | TPOT | Throughput | Memory | Bottleneck Hypothesis |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 待补充 | `vLLM` | 待补充 | `4090 24G` | 待补充 | 待补充 | 待补充 | 待补充 | 待补充 | 待补充 | 待补充 | 待补充 | 待补充 | 待补充 |
+| 2026-05-02 | `vLLM serve` | `./Qwen2-7B-Instruct` | `4090 24G` | random / chat completions | N/A | `60` | `128` | `512` | `169.71 ms` | `21.28 ms` | `995.04 tok/s` | 待补充 | 第一组请求级 latency baseline 已建立，下一步用单变量实验拆分输出长度影响 |
 
 ## 已同步的历史进度
 
@@ -53,7 +53,7 @@
 | `request_count` | `60` |
 | `max_tokens` | `512` |
 
-### 已同步的 baseline 数据
+### 已同步的 offline baseline 数据
 
 来源：`benchmark数据.xlsx / 基线数据`
 
@@ -64,7 +64,28 @@
 | 3 | `29374` | `10.85` | `2708.4` | `0.18` |
 | AVG | `29374` | `10.97` | `2678.7` | `0.183` |
 
-### 对当前 baseline 的解释
+### 已同步的 serve baseline 数据
+
+来源：`benchmark数据.xlsx / serve`
+
+配置：`--num-prompts 60 --input-len 128 --output-len 512 --request-rate inf --max-concurrency 60`
+
+| Round | Successful Requests | Mean TTFT (ms) | P99 TTFT (ms) | Mean TPOT (ms) | P99 TPOT (ms) | Mean ITL (ms) | Output Throughput (tok/s) | Request Throughput (req/s) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `60` | `192.25` | `227.40` | `20.98` | `22.06` | `20.14` | `1040.38` | `6.01` |
+| 2 | `60` | `154.21` | `186.94` | `21.34` | `22.49` | `20.43` | `942.65` | `6.04` |
+| 3 | `60` | `162.67` | `215.10` | `21.51` | `22.83` | `20.51` | `1002.09` | `5.97` |
+| AVG | `60` | `169.71` | `209.81` | `21.28` | `22.46` | `20.36` | `995.04` | `6.01` |
+
+### 对 serve baseline 的解释
+
+- `Successful requests = 60`，说明当前 `serve` benchmark 已经稳定跑通。
+- `Mean TTFT = 169.71 ms`，说明当前首 token 延迟已经进入可作为 baseline 的范围。
+- `Mean TPOT = 21.28 ms`、`Mean ITL = 20.36 ms`，说明稳定生成阶段比较平稳。
+- `Output throughput = 995.04 tok/s`，这是在线服务路径下的输出吞吐，不能直接和 offline 的 `2678.7 tok/s` 做一比一比较。
+- 当前还缺少 GPU 显存峰值记录，后续每轮 `serve` 对比实验都应补上 memory 字段。
+
+### 对当前 offline baseline 的解释
 
 - 当前 baseline 已经具备基本重复性：
   - `time(s)` 波动系数约 `1.55%`
@@ -77,6 +98,13 @@
   - `TPOT`
   - 请求级 latency 分布
   - `prefill / decode` 分阶段解释
+
+### offline 与 serve 的关系
+
+- `offline` 主要回答：引擎内部生成吞吐大概是多少。
+- `serve` 主要回答：在线服务下首包延迟、稳定生成延迟和请求吞吐如何。
+- 当前第一组 `serve` baseline 已经补上 `TTFT / TPOT / ITL`，因此下一步不再是“能不能拿到指标”，而是“指标随变量怎么变化”。
+- 优先拆的变量是 `output length`，因为它最直接影响 decode 阶段，适合先观察 `TPOT / ITL / output tok/s` 的变化。
 
 ### 已同步的 benchmark 脚本意图
 
@@ -129,7 +157,9 @@ python benchmarks/scripts/benchmark.py offline
 ```bash
 python benchmarks/scripts/benchmark.py serve \
   --base-url http://127.0.0.1:8000 \
-  --model Qwen2-7B-Instruct \
+  --endpoint /v1/chat/completions \
+  --endpoint-type openai-chat \
+  --model ./Qwen2-7B-Instruct \
   --num-prompts 60 \
   --input-len 128 \
   --output-len 512 \
@@ -156,7 +186,7 @@ nsys profile \
 ### 当前状态判断
 
 - 当前不再是“从零开始准备环境”
-- 当前已经进入“offline 吞吐基线已稳定，且具备继续补齐 `TTFT / TPOT / memory` 的脚本入口，但指标语言与结果解释仍待补齐”的阶段
+- 当前已经进入“offline 吞吐基线稳定，serve 请求级 latency baseline 已建立，但仍需要通过单变量实验解释指标变化”的阶段
 - 下一步重点不是继续折腾部署，而是把 offline benchmark 与 serve benchmark 的角色彻底分开：
   - offline：吞吐、平均耗时、显存
   - serve：`TTFT / TPOT / ITL / E2E latency`
@@ -183,8 +213,9 @@ nsys profile \
 
 ### Experiment 1A：Serve 指标补齐
 
+- 状态：已完成第一轮 baseline。
 - 目标：
-  - 跑出第一组 `TTFT / TPOT / memory`
+  - 跑出第一组 `TTFT / TPOT / ITL`
   - 建立 offline benchmark 与 serve benchmark 的映射关系
 - 最少记录：
   - `TTFT`
@@ -192,7 +223,7 @@ nsys profile \
   - `ITL`
   - `E2E latency`
   - `request throughput`
-  - GPU 显存峰值
+  - GPU 显存峰值（下一轮补齐）
   - 当前解释
 
 ### Experiment 2：Batch size 对比
@@ -209,6 +240,24 @@ nsys profile \
 
 - 目标：
   - 观察上下文长度和输出长度变化对推理表现的影响
+
+### Experiment 4A：Output Length 单变量对比
+
+- 状态：下一步优先执行。
+- 固定条件：
+  - `num_prompts = 60`
+  - `input_len = 128`
+  - `request_rate = inf`
+  - `max_concurrency = 60`
+- 对比组：
+  - `output_len = 128`
+  - `output_len = 256`
+  - `output_len = 512`
+- 重点观察：
+  - `Mean TTFT / P99 TTFT` 是否基本稳定
+  - `Mean TPOT / P99 TPOT` 是否随输出长度变化
+  - `Output throughput` 是否随输出长度变化
+  - `GPU memory` 是否开始成为约束
 
 ## 结果解读模板
 

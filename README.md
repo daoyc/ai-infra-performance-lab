@@ -51,11 +51,12 @@
 
 ## 当前阶段
 
-当前主线已经从“搭环境”推进到“解释 benchmark 数据”：
+当前主线已经从“搭环境”推进到“解释 benchmark 数据”和“做单变量实验”：
 
 - `vLLM + GPU` 环境与模型校验已经打通
 - offline benchmark 基线已经跑通并具备重复性
-- 当前最关键的工作，是把 `TTFT / TPOT / memory / prefill / decode` 建立成自己的指标语言
+- serve benchmark 已经跑通，并形成第一组 `TTFT / TPOT / ITL` 请求级 baseline
+- 当前最关键的工作，是用 `output length` 单变量实验解释指标变化，并补齐每轮 memory 记录
 
 ## 记录规则
 

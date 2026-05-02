@@ -10,11 +10,11 @@
 ## Question 1
 
 - 问题：
-  - 当前 `benchmark.py` 已经直接输出了总生成 tokens、总耗时、平均吞吐和单 prompt 平均耗时，但还没有直接给出 `TTFT`、`TPOT` 和显存占用。我应该怎样补齐这三类指标，才能把现在的脚本从“吞吐观察入口”升级成“可解释的推理性能基线”？
+  - 当前已经拿到第一组 `serve` baseline，下一步应优先如何设计 `output length` 单变量实验，才能区分输出长度对 `TTFT / TPOT / ITL / throughput` 的影响？
 - 为什么卡住我：
-  - 我现在已经有一条明确面向 `continuous batching + decode throughput` 的实验脚本了，但如果不能补齐 `TTFT / TPOT / memory`，后续实验对比仍然会停留在“吞吐变了”，还不能进入更完整的推理性能分析。
+  - 现在不再是“没有请求级指标”，而是已经有了 `TTFT / TPOT / ITL` baseline。如果下一步变量设计不干净，就很难判断变化到底来自输出长度、调度、随机输出长度，还是显存压力。
 - 我准备怎么验证：
-  - 先固定一组最小 benchmark，逐项确认当前脚本已有输出的含义，再决定是通过脚本补埋点、调用已有 benchmark 接口，还是结合 `nsys / nvidia-smi` 采样来补齐 `TTFT / TPOT / memory`。
+  - 固定 `num_prompts=60`、`input_len=128`、`request_rate=inf`、`max_concurrency=60`，只对比 `output_len=128 / 256 / 512`，每组至少记录 `TTFT / TPOT / ITL / output tok/s / request throughput / memory`。
 
 ## Question 2
 
@@ -36,6 +36,10 @@
 
 ## 已解决问题
 
+- `serve` benchmark 请求级指标补齐：
+  - 已通过 `vllm bench serve` 跑通 `openai-chat + /v1/chat/completions`
+  - 已拿到 3 轮同口径 `serve` baseline
+  - 当前 AVG：`Mean TTFT=169.71 ms`、`Mean TPOT=21.28 ms`、`Mean ITL=20.36 ms`、`Output throughput=995.04 tok/s`
 - `vim` 编辑中文乱码：
   - 临时方案：设置 `encoding / fileencoding / termencoding` 为 `utf-8`
   - 长期方案：在 `~/.vimrc` 中固化 `utf-8` 相关编码配置

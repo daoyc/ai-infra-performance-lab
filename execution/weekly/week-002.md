@@ -21,14 +21,17 @@
    - `serve` 模式对接官方 `vllm bench serve`
    - 增加 GPU 显存采样入口
 4. 新增推理指标对照表与学习闭环文档，便于后续方法论迭代。
+5. 通过 `serve` benchmark 跑通第一组请求级 latency baseline，并记录 3 轮同口径数据。
 
 ## 本周关键判断
 
 - 当前已经不是“不会搭环境”的问题。
 - 当前也不是“不会跑 benchmark”的问题。
+- 当前已经完成从“只会跑 benchmark”到“能拿到 offline + serve 两类基线”的跃迁。
 - 当前真正卡住的是：
-  - 不清楚 benchmark 输出和推理性能指标之间的严格映射
-  - 还没把 `TTFT / TPOT / memory / prefill / decode` 建立成自己的分析语言
+  - 如何解释 `TTFT / TPOT / ITL` 随变量变化的原因
+  - 如何把 `memory / KV cache` 纳入每轮对比记录
+  - 如何用单变量实验拆开 `prefill / decode` 的影响边界
 
 ## 本周已确认的事实
 
@@ -43,18 +46,25 @@
   - `TPOT`
   - `ITL`
   - 请求级延迟分布
+- 当前 serve benchmark 已经补齐：
+  - `Mean TTFT = 169.71 ms`
+  - `Mean TPOT = 21.28 ms`
+  - `Mean ITL = 20.36 ms`
+  - `Output throughput = 995.04 tok/s`
+  - `Request throughput = 6.01 req/s`
 
 ## 对技能升级的影响
 
 - 本周新增的是“推理指标语言”和“benchmark 解释框架”的基础设施。
 - 这仍然主要支撑 `LLM 推理性能` 方向的学习推进。
-- 本周暂不升级 `identity/skills.md` 中的相关技能等级，因为还缺少一轮带 `TTFT / TPOT / memory` 的实测证据。
+- 本周可以认为 `LLM 推理性能指标理解` 从“发展中”推进到“部分验证”：已经有实测 `serve` baseline，但还缺少单变量对比与稳定解释。
+- 暂不升级为“能实践”，因为还缺少 `output length / concurrency / input length` 至少一轮对比实验。
 
 ## 下周只做什么
 
-1. 跑第一组 `serve` benchmark。
-2. 拿到第一批 `TTFT / TPOT / memory` 数据。
-3. 做一轮单变量实验，优先看 `output length`。
-4. 写出第一条最小解释：
+1. 做一轮 `output length` 单变量实验，优先看 `128 / 256 / 512`。
+2. 每轮补齐 `TTFT / TPOT / ITL / output tok/s / request throughput / memory`。
+3. 写出第一条最小解释：
    - offline benchmark 主要测什么
    - serve benchmark 补上了什么
+   - output length 变化主要影响了哪些指标

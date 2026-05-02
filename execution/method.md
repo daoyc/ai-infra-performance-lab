@@ -19,12 +19,14 @@
 - 云端 GPU 环境接入
 - `vLLM + Qwen2-7B-Instruct` 部署与模型校验
 - offline benchmark 基线跑通
+- serve benchmark 基线跑通，并拿到第一组 `TTFT / TPOT / ITL`
 - `Nsight Systems` 入口准备
 
-你现在还没补齐的是：
+你现在还需要补齐的是：
 
-- `TTFT / TPOT / memory` 的指标语言
-- `prefill / decode` 的边界解释
+- `TTFT / TPOT / ITL` 随变量变化的解释
+- `memory` 字段在每轮实验中的稳定记录
+- `prefill / decode` 的边界解释和实验验证
 - 从“会跑 benchmark”升级到“会解释 benchmark”
 
 ## 当前可迁移的旧能力
@@ -40,10 +42,10 @@
 
 | 新能力 | 当前缺口 | 如何补 |
 | --- | --- | --- |
-| `TTFT / TPOT / ITL / E2E` 指标语言 | 已知名词，但还没有和现有 benchmark 严格对应 | 先跑 serve benchmark，再把每个指标写成自己的话 |
+| `TTFT / TPOT / ITL / E2E` 指标语言 | 已有第一组 serve baseline，但还需要解释变量变化 | 用 output length 对比实验建立第一条因果解释 |
 | `prefill / decode` 拆分视角 | 当前 offline benchmark 更偏 decode，边界还不够清楚 | 通过 `input/output length` 与 `request_count` 单变量实验拆开 |
-| `memory / KV cache` 视角 | 现在只知道显存重要，但还不会系统记录 | 把显存采样纳入 benchmark 台账 |
-| `serve benchmark` 使用与解释 | 当前只会 offline benchmark | 使用 `vllm bench serve` 跑出第一轮 TTFT / TPOT |
+| `memory / KV cache` 视角 | 当前 serve 表还缺少 memory 字段 | 把显存采样纳入 benchmark 台账 |
+| `serve benchmark` 使用与解释 | 已能跑通，但还要形成解释模板 | 固定记录 `TTFT / TPOT / ITL / throughput / memory` |
 | 推理实验台账化 | 已有数据，但还没完全变成可复盘闭环 | 每轮实验都写“现象 -> 指标变化 -> 解释 -> 下一步验证” |
 
 ## 固定学习闭环
@@ -80,8 +82,10 @@
 ### Stage 1：补齐指标语言
 
 - 跑通 `benchmarks/scripts/benchmark.py serve`
-- 拿到第一组 `TTFT / TPOT / memory`
+- 拿到第一组 `TTFT / TPOT / ITL`
 - 用自己的话解释这些指标
+
+状态：已完成 `TTFT / TPOT / ITL` 的第一组 baseline，`memory` 仍需在 serve 对比实验中补齐。
 
 ### Stage 2：建立阶段边界
 
@@ -121,9 +125,10 @@
 
 你接下来最应该做的不是继续看资料，而是：
 
-1. 用新版 `benchmarks/scripts/benchmark.py` 跑出第一组 `serve` 结果。
-2. 把 `TTFT / TPOT / memory` 写回台账。
-3. 只做一轮单变量对比，先看 `output length`。
+1. 把第一组 `serve` baseline 作为固定参照。
+2. 只做一轮单变量对比，先看 `output length = 128 / 256 / 512`。
+3. 每轮补齐 `TTFT / TPOT / ITL / output tok/s / request throughput / memory`。
 4. 写一条最小解释：
    - 当前 offline benchmark 主要在测什么
    - 当前 serve benchmark 补上了什么
+   - output length 变化主要影响了哪些指标
