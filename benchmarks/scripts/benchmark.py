@@ -570,6 +570,23 @@ def add_metadata_args(cmd: list[str], metadata: list[str]) -> None:
         cmd.extend(["--metadata", item])
 
 
+def add_dataset_length_args(cmd: list[str], args: argparse.Namespace) -> None:
+    if args.dataset_name == "random":
+        cmd.extend(["--random-input-len", str(args.input_len)])
+        cmd.extend(["--random-output-len", str(args.output_len)])
+        return
+    cmd.extend(["--input-len", str(args.input_len)])
+    cmd.extend(["--output-len", str(args.output_len)])
+
+
+def resolve_endpoint_type(args: argparse.Namespace) -> str:
+    if args.endpoint_type:
+        return args.endpoint_type
+    if "chat/completions" in args.endpoint:
+        return "openai-chat"
+    return "openai"
+
+
 def flatten_metrics(obj: Any, prefix: str = "") -> dict[str, Any]:
     flat: dict[str, Any] = {}
     if isinstance(obj, dict):
@@ -613,6 +630,7 @@ def run_serve(args: argparse.Namespace) -> int:
     result_dir = Path(args.result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
     result_path = result_dir / args.result_filename
+    endpoint_type = resolve_endpoint_type(args)
 
     cmd = [
         "vllm",
@@ -620,6 +638,8 @@ def run_serve(args: argparse.Namespace) -> int:
         "serve",
         "--backend",
         args.backend,
+        "--endpoint-type",
+        endpoint_type,
         "--base-url",
         args.base_url,
         "--endpoint",
@@ -630,10 +650,6 @@ def run_serve(args: argparse.Namespace) -> int:
         args.dataset_name,
         "--num-prompts",
         str(args.num_prompts),
-        "--input-len",
-        str(args.input_len),
-        "--output-len",
-        str(args.output_len),
         "--request-rate",
         str(args.request_rate),
         "--max-concurrency",
@@ -645,6 +661,7 @@ def run_serve(args: argparse.Namespace) -> int:
         "--result-filename",
         args.result_filename,
     ]
+    add_dataset_length_args(cmd, args)
 
     if args.tokenizer:
         cmd.extend(["--tokenizer", args.tokenizer])
@@ -667,8 +684,10 @@ def run_serve(args: argparse.Namespace) -> int:
             "wrap official vllm bench serve; use this mode when TTFT / TPOT / ITL / "
             "end-to-end latency are the target metrics"
         ),
+        "return_code": proc.returncode,
         "config": {
             "backend": args.backend,
+            "endpoint_type": endpoint_type,
             "base_url": args.base_url,
             "endpoint": args.endpoint,
             "model": args.model,
@@ -690,7 +709,13 @@ def run_serve(args: argparse.Namespace) -> int:
         summary["interesting_metrics"] = extract_interesting_metrics(payload)
     else:
         summary["interesting_metrics"] = {}
-        summary["note"] = "未找到保存结果文件，请确认 vllm bench serve 已成功输出结果。"
+        if proc.returncode != 0:
+            summary["note"] = (
+                "vllm bench serve 执行失败，未生成结果文件。"
+                " 请优先检查命令参数与服务端模型是否匹配。"
+            )
+        else:
+            summary["note"] = "未找到保存结果文件，请确认 vllm bench serve 已成功输出结果。"
 
     print_serve_summary(summary)
     maybe_print_json(summary, args)
@@ -728,8 +753,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     serve.add_argument("--backend", default="openai")
     serve.add_argument("--base-url", default="http://127.0.0.1:8000")
-    serve.add_argument("--endpoint", default="/v1/completions")
-    serve.add_argument("--model", default="Qwen2-7B-Instruct")
+    serve.add_argument("--endpoint-type", choices=["openai", "openai-chat"], default=None)
+    serve.add_argument("--endpoint", default="/v1/chat/completions")
+    serve.add_argument("--model", default="./Qwen2-7B-Instruct")
     serve.add_argument("--tokenizer")
     serve.add_argument("--dataset-name", default="random")
     serve.add_argument("--num-prompts", type=int, default=60)
